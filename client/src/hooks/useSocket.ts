@@ -1,7 +1,7 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { io, Socket } from 'socket.io-client';
 
-const SOCKET_URL = import.meta.env.VITE_SERVER_URL || "https://skribbl-kxbm.onrender.com";
+const SOCKET_URL = import.meta.env.VITE_SERVER_URL || "http://localhost:3001";
 
 let socketInstance: Socket | null = null;
 

@@ -152,6 +152,10 @@ export default function HomePage() {
               <SettingSlider label="Draw Time" min={15} max={240} value={settings.drawTime} unit="s" onChange={v => setSettings(s => ({ ...s, drawTime: v }))} />
               <SettingSlider label="Word Count" min={1} max={5} value={settings.wordCount} onChange={v => setSettings(s => ({ ...s, wordCount: v }))} />
               <SettingSlider label="Hints" min={0} max={5} value={settings.hints} onChange={v => setSettings(s => ({ ...s, hints: v }))} />
+              <SettingSlider label="Rounds" min={2} max={10} value={settings.rounds} onChange={v => setSettings(s => ({ ...s, rounds: v }))} />
+              <SettingSlider label="Draw Time" min={15} max={240} value={settings.drawTime} unit="s" onChange={v => setSettings(s => ({ ...s, drawTime: v }))} />
+              <SettingSlider label="Word Count" min={1} max={5} value={settings.wordCount} onChange={v => setSettings(s => ({ ...s, wordCount: v }))} />
+              <SettingSlider label="Hints" min={0} max={5} value={settings.hints} onChange={v => setSettings(s => ({ ...s, hints: v }))} />
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 <label style={{ fontSize: '0.75rem', color: 'var(--text2)', fontWeight: 700, textTransform: 'uppercase' }}>Private</label>
                 <button
@@ -240,8 +244,13 @@ export default function HomePage() {
   );
 }
 
-function SettingSlider({ label, min, max, value, unit = '', onChange }: {
-  label: string; min: number; max: number; value: number; unit?: string; onChange: (v: number) => void;
+function SettingSlider({ label, min, max, value, unit, onChange }: {
+  label: string; 
+  min: number; 
+  max: number; 
+  value: number; 
+  unit?: string; 
+  onChange: (v: number) => void;
 }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>

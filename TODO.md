@@ -1,18 +1,47 @@
-# Skribbl Clone Fix: Lobby Flash/Redirect Issue ✅
+# Skribbl Clone Fix & Complete Plan
+Project has lobby working, stubs for game, but game logic incomplete. Dependencies installed. Windows cmd issues prevented re-install but node_modules exist.
 
-## Issue FIXED
-After creating room, lobby flashes 0.2s then redirects to game page.
+## Issues Identified
+1. **Server Game Logic**: server/index.js has basic start_game but no full game flow (word select, drawing sync, guessing, rounds, scoring). Game.js class exists but not integrated.
+2. **Client Stub Components**: DrawingCanvas/ChatPanel ready but need socket events. WordSelection/RoundEnd/GameOver likely empty stubs.
+3. **Socket Events Missing**: Client GamePage listens for 'draw_data', 'chat_message', etc. Server doesn't emit them.
+4. **App.tsx Bug**: Missing myAvatar in context value.
+5. **Console.logs**: Minor in GamePage/Lobby/Home.
+6. **Lobby UI**: Basic HTML, no settings display/kick.
+7. **No Run Servers**: Need to start server/client.
 
-## Root Cause FIXED
-LobbyPage useEffect duplicate socket listeners + bad deps → race condition on room create.
+## Fix Steps (in order)
+### 1. Fix App.tsx (quick)
+- Add myAvatar to context value.
 
-## Steps COMPLETED
-- [x] Step 1: Create TODO.md ✅
-- [x] Step 2: Fix LobbyPage.tsx useEffect (split effects, useCallback handlers, stable deps) ✅
-- [x] Step 3: TS fixed (added useCallback import) ✅
-- [x] Step 4: Verified no compile errors ✅
-- [x] Step 5: Task complete ✅
+### 2. Integrate Server Game Logic
+- Edit server/index.js to use Game.js/Room.js.
+- Add events: start_round, word_selected, draw_data sync, send_message (guess check), round_end, etc.
 
-**Fix Summary:** Split LobbyPage useEffect into setup/fetch and listeners. Added useCallback for handlers to prevent duplicates. Fixed deps. Lobby now stable on room create; manual start_game navigates correctly.
+### 3. Client Components
+- Read/fix WordSelection.tsx, RoundEnd.tsx, GameOver.tsx if broken.
+- Ensure Canvas/Chat sync with new events.
 
-Test: cd client && npm run dev; cd ../server && node index.js → Create room → Stable lobby until host starts.
+### 4. Test Flow
+- Start server/client.
+- Create room, start, word select, draw/guess.
+
+## Commands to Run
+```
+# Terminal 1 (server)
+cd server
+npm start
+
+# Terminal 2 (client)
+cd client
+npm run dev
+```
+
+Proceeding with fixes step-by-step. Progress marked here.
+- [x] 1. App.tsx (fixed context value)
+- [x] 2. Server integration (index.js + MessageHandler.js + Rooms.js)
+
+- [ ] 3. Client components
+- [ ] 4. Test & polish
+
+

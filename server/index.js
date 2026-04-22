@@ -1,34 +1,32 @@
-const express = require('express');
-const http = require('http');
-const { Server } = require('socket.io');
-const cors = require('cors');
-const path = require('path');
-const MessageHandler = require('./MessageHandler');
+const express = require("express");
+const http = require("http");
+const { Server } = require("socket.io");
+const { nanoid } = require("nanoid");
 
 const app = express();
-const server = http.createServer(app);
+app.use(express.json());
 
-const CLIENT_URL = process.env.CLIENT_URL || 'http://localhost:5173';
+const server = http.createServer(app);
 
 const io = new Server(server, {
   cors: {
-    origin: [CLIENT_URL, 'http://localhost:5173', 'http://localhost:3000'],
-    methods: ['GET', 'POST']
+    origin: "*",
+    methods: ["GET", "POST"]
   }
 });
 
-app.use(cors({ origin: [CLIENT_URL, 'http://localhost:5173', 'http://localhost:3000'] }));
-app.use(express.json());
+const PORT = process.env.PORT || 3001;
 
-// In-memory store
-const rooms = new Map(); // roomId -> Room
+const Rooms = require('./Rooms');
 
-const msgHandler = new MessageHandler(io, rooms);
 
-// ─── REST Endpoints ──────────────────────────────────────────────────────────
+// API endpoint for public rooms
+const MessageHandler = require('./MessageHandler');
+const messageHandler = new MessageHandler(io, Rooms);
+
 app.get('/api/rooms', (req, res) => {
   const publicRooms = [];
-  for (const room of rooms.values()) {
+  for (const room of Rooms.values()) {
     if (!room.settings.isPrivate && room.game.phase === 'lobby' && !room.isFull()) {
       publicRooms.push(room.toPublicJSON());
     }
@@ -36,40 +34,26 @@ app.get('/api/rooms', (req, res) => {
   res.json({ rooms: publicRooms });
 });
 
-app.get('/api/rooms/:roomId', (req, res) => {
-  const room = rooms.get(req.params.roomId);
-  if (!room) return res.status(404).json({ error: 'Room not found' });
-  res.json({ room: room.toJSON() });
+
+io.on("connection", (socket) => {
+  console.log("User connected:", socket.id);
+
+  socket.on("create_room", (data, callback) => messageHandler.handleCreateRoom(socket, data, callback));
+  socket.on("join_room", (data, callback) => messageHandler.handleJoinRoom(socket, data, callback));
+  socket.on("start_game", () => messageHandler.handleStartGame(socket));
+  socket.on("word_selected", (data) => messageHandler.handleWordChosen(socket, data));
+  socket.on("draw_start", (data) => messageHandler.handleDrawStart(socket, data));
+  socket.on("draw_move", (data) => messageHandler.handleDrawMove(socket, data));
+  socket.on("draw_end", (data) => messageHandler.handleDrawEnd(socket, data));
+  socket.on("canvas_clear", () => messageHandler.handleCanvasClear(socket));
+  socket.on("draw_undo", () => messageHandler.handleDrawUndo(socket));
+  socket.on("send_message", (data, callback) => messageHandler.handleGuess(socket, data, callback));
+  socket.on("chat", (data) => messageHandler.handleChat(socket, data));
+
+  socket.on("disconnect", () => messageHandler.handleDisconnect(socket));
 });
 
-app.get('/health', (req, res) => res.json({ status: 'ok', rooms: rooms.size }));
 
-// ─── Socket.IO ───────────────────────────────────────────────────────────────
-io.on('connection', (socket) => {
-  console.log(`Socket connected: ${socket.id}`);
-
-  socket.on('create_room', (data, cb) => msgHandler.handleCreateRoom(socket, data, cb));
-  socket.on('join_room', (data, cb) => msgHandler.handleJoinRoom(socket, data, cb));
-  socket.on('get_public_rooms', (data, cb) => msgHandler.handleGetPublicRooms(socket, data, cb));
-  socket.on('start_game', (data, cb) => msgHandler.handleStartGame(socket, data, cb));
-
-  socket.on('draw_start', (data) => msgHandler.handleDrawStart(socket, data));
-  socket.on('draw_move', (data) => msgHandler.handleDrawMove(socket, data));
-  socket.on('draw_end', (data) => msgHandler.handleDrawEnd(socket, data));
-  socket.on('canvas_clear', () => msgHandler.handleCanvasClear(socket));
-  socket.on('draw_undo', () => msgHandler.handleDrawUndo(socket));
-
-  socket.on('word_chosen', (data) => msgHandler.handleWordChosen(socket, data));
-  socket.on('guess', (data) => msgHandler.handleGuess(socket, data));
-  socket.on('chat', (data) => msgHandler.handleChat(socket, data));
-
-  socket.on('disconnect', () => {
-    console.log(`Socket disconnected: ${socket.id}`);
-    msgHandler.handleDisconnect(socket);
-  });
-});
-
-const PORT = process.env.PORT || 3001;
 server.listen(PORT, () => {
-  console.log(`🎮 Skribbl Clone server running on port ${PORT}`);
+  console.log(`Server running on port ${PORT}`);
 });

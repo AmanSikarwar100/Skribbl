@@ -21,13 +21,25 @@ class MessageHandler {
 
   handleJoinRoom(socket, { roomId, playerName }, callback) {
     const room = this.rooms.get(roomId);
-    if (!room) return callback({ success: false, error: 'Room not found' });
-    if (room.isFull()) return callback({ success: false, error: 'Room is full' });
-    if (room.game.phase !== 'lobby') return callback({ success: false, error: 'Game already in progress' });
+    if (!room) {
+      if (callback) callback({ success: false, error: 'Room not found' });
+      return;
+    }
+    if (room.isFull()) {
+      if (callback) callback({ success: false, error: 'Room is full' });
+      return;
+    }
+    if (room.game.phase !== 'lobby') {
+      if (callback) callback({ success: false, error: 'Game already in progress' });
+      return;
+    }
 
     const playerId = socket.id;
     const player = room.addPlayer(playerId, playerName, socket.id);
-    if (!player) return callback({ success: false, error: 'Could not join room' });
+    if (!player) {
+      if (callback) callback({ success: false, error: 'Could not join room' });
+      return;
+    }
 
     socket.join(roomId);
     socket.roomId = roomId;
@@ -40,7 +52,7 @@ class MessageHandler {
     });
 
     console.log(`${playerName} joined room ${roomId}`);
-    callback({
+    if (callback) callback({
       success: true,
       roomId,
       playerId,
@@ -48,6 +60,7 @@ class MessageHandler {
       room: room.toJSON()
     });
   }
+
 
   handleGetPublicRooms(socket, _, callback) {
     const publicRooms = [];
@@ -59,11 +72,11 @@ class MessageHandler {
     callback({ rooms: publicRooms });
   }
 
-  handleStartGame(socket, _, callback) {
+  handleStartGame(socket, data, callback) {
     const room = this.rooms.get(socket.roomId);
-    if (!room) return callback?.({ success: false, error: 'Room not found' });
-    if (socket.playerId !== room.hostId) return callback?.({ success: false, error: 'Only host can start' });
-    if (!room.canStart()) return callback?.({ success: false, error: 'Need at least 2 players' });
+    if (!room) return;
+    if (socket.playerId !== room.hostId) return;
+    if (!room.canStart()) return;
 
     room.startGame();
     room.startNewRound();
@@ -84,13 +97,14 @@ class MessageHandler {
     }
 
     // Tell everyone else who's drawing (no word options)
-    socket.to(room.id).emit('round_start', {
-      drawerId: drawer.id,
-      wordOptions: null,
-      drawTime: room.settings.drawTime,
-      round: room.game.currentRound,
-      totalRounds: room.settings.rounds
-    });
+    this.io.to(room.id).emit('round_start', {
+        drawerId: drawer.id,
+        wordOptions: null,
+        drawTime: room.settings.drawTime,
+        round: room.game.currentRound,
+        totalRounds: room.settings.rounds
+      });
+
 
     // Update game state
     this.io.to(room.id).emit('game_state', {
@@ -101,8 +115,9 @@ class MessageHandler {
       players: room.getPlayersArray()
     });
 
-    callback?.({ success: true });
+    if (callback) callback({ success: true });
   }
+
 
   // ─── Drawing ───────────────────────────────────────────────────────────────
 
@@ -189,7 +204,7 @@ class MessageHandler {
 
   // ─── Guessing & Chat ───────────────────────────────────────────────────────
 
-  handleGuess(socket, { text }) {
+  handleGuess(socket, { text }, callback) {
     const room = this.rooms.get(socket.roomId);
     if (!room || room.game.phase !== 'drawing') return;
 
@@ -227,6 +242,7 @@ class MessageHandler {
       });
 
       this.io.to(room.id).emit('players_update', { players: room.getPlayersArray() });
+      if (callback) callback({ success: res.success, isCorrectGuess: res.isCorrectGuess });
 
       // Check if all non-drawers guessed correctly
       const nonDrawers = Array.from(room.players.values()).filter(p => p.id !== drawer.id);
@@ -359,15 +375,14 @@ class MessageHandler {
       });
     }
 
-    socket_to_room: {
-      this.io.to(room.id).emit('round_start', {
+    this.io.to(room.id).emit('round_start', {
         drawerId: drawer.id,
         wordOptions: null,
         drawTime: room.settings.drawTime,
         round: room.game.currentRound,
         totalRounds: room.settings.rounds
       });
-    }
+
 
     this.io.to(room.id).emit('game_state', {
       phase: 'word_selection',

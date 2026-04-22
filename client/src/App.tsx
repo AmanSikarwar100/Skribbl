@@ -89,6 +89,7 @@ export default function App() {
       timeLeft, setTimeLeft,
       isDrawing, setIsDrawing
     }}>
+
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<HomePage />} />
