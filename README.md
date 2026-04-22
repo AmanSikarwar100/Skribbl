@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # 🎨 Skribbl Clone
 
 A full-stack, real-time multiplayer drawing and guessing game — a clone of [skribbl.io](https://skribbl.io).
@@ -277,3 +278,6 @@ guess.trim().toLowerCase() === word.toLowerCase()
 - Game state is **in-memory only** — rooms disappear if the server restarts (no database needed for MVP)
 - Canvas uses **normalized coordinates** for cross-device consistency
 - Socket.IO automatically falls back from WebSocket to HTTP long-polling if needed
+=======
+Skribbl Clone
+>>>>>>> 974da4dd577a9229b47b46dfa57d72b02d1a14ef
