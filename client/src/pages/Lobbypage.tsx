@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAppContext } from '../App';
 import { getSocket } from '../hooks/useSocket';
@@ -9,18 +9,40 @@ export default function LobbyPage() {
   const { roomId } = useParams<{ roomId: string }>();
   const navigate = useNavigate();
   const { myId, myName, room, setRoom, players, setPlayers, setGameState } = useAppContext();
+  const onPlayerJoined = useCallback(({ players: updatedPlayers }: { player: Player; players: Player[] }) => {
+    setPlayers(updatedPlayers);
+  }, [setPlayers]);
+
+  const onPlayerLeft = useCallback(({ players: updatedPlayers, newHostId }: { playerId: string; playerName: string; players: Player[]; newHostId: string }) => {
+    setPlayers(updatedPlayers);
+    if (room) setRoom({ ...room, hostId: newHostId, players: updatedPlayers });
+  }, [setPlayers, setRoom, room]);
+
+  const onGameState = useCallback((state: { phase: string; round: number; totalRounds: number; drawerId: string; players: Player[] }) => {
+    if (state.phase !== 'lobby') {
+      setGameState(state as Parameters<typeof setGameState>[0]);
+      setPlayers(state.players || []);
+      navigate(`/game/${roomId}`);
+    }
+  }, [setGameState, setPlayers, navigate, roomId]);
   const socket = getSocket();
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState('');
 
   const isHost = room?.hostId === myId;
 
+  // Effect 1: Initial setup and fetch
   useEffect(() => {
-    if (!myName || !roomId) { navigate('/'); return; }
-    if (!socket.connected) socket.connect();
+    if (!myName || !roomId) { 
+      navigate('/'); 
+      return; 
+    }
+    
+    if (!socket.connected) {
+      socket.connect();
+      return;
+    }
 
-    // If we have room data already (just created/joined), use it
-    // Otherwise try to fetch room info
     if (!room) {
       fetch(`/api/rooms/${roomId}`)
         .then(r => r.json())
@@ -34,23 +56,11 @@ export default function LobbyPage() {
         })
         .catch(() => navigate('/'));
     }
+  }, [myName, roomId, room, socket.connected, navigate, setRoom, setPlayers]);
 
-    const onPlayerJoined = ({ players: updatedPlayers }: { player: Player; players: Player[] }) => {
-      setPlayers(updatedPlayers);
-    };
-
-    const onPlayerLeft = ({ players: updatedPlayers, newHostId }: { playerId: string; playerName: string; players: Player[]; newHostId: string }) => {
-      setPlayers(updatedPlayers);
-      if (room) setRoom({ ...room, hostId: newHostId, players: updatedPlayers });
-    };
-
-    const onGameState = (state: { phase: string; round: number; totalRounds: number; drawerId: string; players: Player[] }) => {
-      if (state.phase !== 'lobby') {
-        setGameState(state as Parameters<typeof setGameState>[0]);
-        setPlayers(state.players || []);
-        navigate(`/game/${roomId}`);
-      }
-    };
+  // Effect 2: Socket listeners (stable)
+  useEffect(() => {
+    if (!socket.connected) return;
 
     socket.on('player_joined', onPlayerJoined);
     socket.on('player_left', onPlayerLeft);
@@ -61,9 +71,9 @@ export default function LobbyPage() {
       socket.off('player_joined', onPlayerJoined);
       socket.off('player_left', onPlayerLeft);
       socket.off('game_state', onGameState);
-      socket.off('round_start');
+      socket.off('round_start', () => navigate(`/game/${roomId}`));
     };
-  }, [socket, roomId, myName, navigate, room, setRoom, setPlayers, setGameState]);
+  }, [socket.connected, onPlayerJoined, onPlayerLeft, onGameState, navigate, roomId]);
 
   const handleStart = () => {
     if (players.length < 2) { setError('Need at least 2 players to start!'); return; }
