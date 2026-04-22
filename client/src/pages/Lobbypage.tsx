@@ -43,26 +43,32 @@ export default function LobbyPage() {
 
   // Socket listeners
   useEffect(() => {
-    const handlePlayers = (updatedPlayers: Player[]) => {
-      console.log("Players:", updatedPlayers);
-      setPlayers(updatedPlayers);
+    const handlePlayerJoined = ({ player, players }: { player: Player; players: Player[] }) => {
+      console.log("Player joined:", player);
+      setPlayers(players);
     };
 
-    const handleGameState = (state: GameState) => {
-      console.log("GameState:", state);
-
-      if (state.phase !== 'lobby') {
-        setGameState(state);
-        setPlayers(state.players || []);
-        navigate(`/game/${roomId!}`);
-      }
+    const handlePlayerLeft = ({ players }: { players: Player[] }) => {
+      console.log("Player left:", players);
+      setPlayers(players);
     };
 
-    socket.on("players", handlePlayers);
+    const handlePlayersUpdate = ({ players }: { players: Player[] }) => {
+      console.log("Players update:", players);
+      setPlayers(players);
+    };
+
+    const handleGameState = (state: GameState) => {\n      console.log("Game state received:", state);\n\n      if (state.phase === "word_selection") {\n        navigate(`/game/${roomId}`);\n      }\n    };
+
+    socket.on("player_joined", handlePlayerJoined);
+    socket.on("player_left", handlePlayerLeft);
+    socket.on("players_update", handlePlayersUpdate);
     socket.on("game_state", handleGameState);
 
     return () => {
-      socket.off("players", handlePlayers);
+      socket.off("player_joined", handlePlayerJoined);
+      socket.off("player_left", handlePlayerLeft);
+      socket.off("players_update", handlePlayersUpdate);
       socket.off("game_state", handleGameState);
     };
   }, [socket, setPlayers, setGameState, navigate, roomId]);
@@ -109,7 +115,10 @@ export default function LobbyPage() {
 
       <br />
 
-      <button onClick={() => navigate('/')}>
+      <button onClick={() => {
+        socket.emit("leave_room");
+        navigate('/');
+      }}>
         Leave
       </button>
 
@@ -119,4 +128,3 @@ export default function LobbyPage() {
     </div>
   );
 }
-

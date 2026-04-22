@@ -118,6 +118,36 @@ class MessageHandler {
     if (callback) callback({ success: true });
   }
 
+  handleLeaveRoom(socket) {
+    const room = this.rooms.get(socket.roomId);
+    if (!room) return;
+
+    const player = room.getPlayer(socket.playerId);
+    const playerName = player ? player.name : 'Unknown';
+    
+    room.removePlayer(socket.playerId);
+
+    // If host leaves, assign new host
+    if (socket.playerId === room.hostId && room.players.size > 0) {
+      room.hostId = Array.from(room.players.values())[0].id;
+    }
+
+    // Notify remaining players
+    this.io.to(room.id).emit('player_left', {
+      playerId: socket.playerId,
+      playerName,
+      players: room.getPlayersArray(),
+      newHostId: room.hostId
+    });
+
+    // Cleanup if room empty
+    if (room.players.size === 0) {
+      if (room.game.timer) clearInterval(room.game.timer);
+      this.rooms.delete(room.id);
+      console.log(`Room ${room.id} deleted (empty)`);
+    }
+  }
+
 
   // ─── Drawing ───────────────────────────────────────────────────────────────
 
