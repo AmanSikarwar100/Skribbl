@@ -1,194 +1,114 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import React from 'react';
+import { useParams } from 'react-router-dom';
 import { useAppContext } from '../App';
-import { getSocket } from '../hooks/useSocket';
-import { StrokeData } from '../types';
 import DrawingCanvas from '../components/DrawingCanvas';
 import ChatPanel from '../components/ChatPanel';
 import WordSelection from '../components/WordSelection';
 import RoundEnd from '../components/RoundEnd';
 import GameOver from '../components/GameOver';
+import Avatar from '../components/Avatar';
 
 export default function GamePage() {
-  const { roomId } = useParams<{ roomId: string }>();
-  const navigate = useNavigate();
-  const { myId, room, gameState, setGameState, messages, addMessage, currentWord, setCurrentWord, wordHint, setWordHint, timeLeft, setTimeLeft, isDrawing, setIsDrawing, players } = useAppContext();
-  const socket = getSocket();
+  const { roomId } = useParams();
+  const {
+    room,
+    gameState,
+    players,
+    messages,
+    addMessage,
+    currentWord,
+    wordHint,
+    timeLeft,
+    isDrawing,
+    myId
+  } = useAppContext();
 
-  const [canvasStrokes, setCanvasStrokes] = useState<StrokeData[]>([]);
-  const [hasGuessedCorrectly, setHasGuessedCorrectly] = useState(false);
-  const [roundData, setRoundData] = useState<{ correct_word?: string; guesser_names?: string[] } | null>(null);
-
-  useEffect(() => {
-    if (!socket.connected) socket.connect();
-  }, [socket]);
-
-  // Socket event handlers
-  useEffect(() => {
-    const handleGameState = (state: any) => {
-      setGameState(state);
-      setCanvasStrokes([]);
-      setHasGuessedCorrectly(false);
-      setRoundData(null);
-    };
-
-    const handleDrawData = (data: StrokeData) => {
-      setCanvasStrokes(prev => [...prev, data]);
-    };
-
-    const handleChatMessage = (msg: any) => {
-      addMessage(msg);
-      if (msg.isCorrectGuess && msg.playerId === myId) {
-        setHasGuessedCorrectly(true);
-      }
-    };
-
-    const handleRoundEnd = (data: any) => {
-      setRoundData(data);
-    };
-
-    const handleGameOver = (data: any) => {
-      // Game is over
-      console.log('Game over:', data);
-    };
-
-    const handleTimeUpdate = (data: { timeLeft: number }) => {
-      setTimeLeft(data.timeLeft);
-    };
-
-    socket.on('game_state', handleGameState);
-    socket.on('draw_data', handleDrawData);
-    socket.on('chat_message', handleChatMessage);
-    socket.on('round_end', handleRoundEnd);
-    socket.on('game_over', handleGameOver);
-    socket.on('time_update', handleTimeUpdate);
-
-    return () => {
-      socket.off('game_state', handleGameState);
-      socket.off('draw_data', handleDrawData);
-      socket.off('chat_message', handleChatMessage);
-      socket.off('round_end', handleRoundEnd);
-      socket.off('game_over', handleGameOver);
-      socket.off('time_update', handleTimeUpdate);
-    };
-  }, [socket, addMessage, myId, setGameState, setTimeLeft]);
-
-  if (!gameState) {
-    return <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>Loading...</div>;
+  if (!room || !gameState) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-blue-500 to-purple-600">
+        <div className="text-white text-xl">Loading game...</div>
+      </div>
+    );
   }
 
-  const isDrawer = gameState.drawerId === myId;
+  const drawer = players.find(p => p.id === gameState.drawerId);
+  const drawerName = drawer ? drawer.name : 'Someone';
 
-  const handleSendMessage = (text: string) => {
-    socket.emit('send_message', { text }, (res: any) => {
-      if (res?.success) {
-        addMessage({
-          playerId: myId,
-          playerName: 'You',
-          text,
-          isCorrect: res.isCorrectGuess
-        });
-      }
-    });
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
-  // Show round end screen
-  if (roundData) {
-    return (
-      <RoundEnd
-        word={roundData.correct_word || 'Unknown'}
-        scores={players.map(p => ({ id: p.id, name: p.name, score: p.score, avatar: p.avatar }))}
-        players={players}
-        onContinue={() => setRoundData(null)}
-      />
-    );
-  }
-
-  // Show game over screen
-  if (gameState.phase === 'results' || (gameState.round > gameState.totalRounds)) {
-    const leaderboard = [...players].sort((a, b) => b.score - a.score);
-    const winner = leaderboard[0] || null;
-    return (
-      <GameOver
-        winner={winner ? { id: winner.id, name: winner.name, score: winner.score, avatar: winner.avatar } : null}
-        leaderboard={leaderboard.map(p => ({ id: p.id, name: p.name, score: p.score, avatar: p.avatar }))}
-        myId={myId}
-      />
-    );
-  }
-
-  // Show word selection for drawer
-  if (isDrawer && gameState.phase === 'drawing' && !currentWord) {
-    return (
-      <WordSelection
-        words={['Word 1', 'Word 2', 'Word 3']}
-        onChoose={(word: string) => {
-          setCurrentWord(word);
-          socket.emit('word_selected', { word });
-        }}
-        drawTime={gameState.phase === 'drawing' ? timeLeft : 0}
-      />
-    );
-  }
-
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', background: 'var(--bg)' }}>
-      {/* Top bar with info */}
-      <div style={{ background: 'var(--card)', borderBottom: '1px solid var(--border)', padding: '12px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div style={{ display: 'flex', gap: 20, alignItems: 'center' }}>
-          <div>
-            <span style={{ color: 'var(--text3)', fontSize: '0.8rem' }}>Round</span>
-            <div style={{ fontSize: '1.4rem', fontWeight: 900, color: 'var(--accent)' }}>{gameState.round}/{gameState.totalRounds}</div>
-          </div>
-          <div>
-            <span style={{ color: 'var(--text3)', fontSize: '0.8rem' }}>Time</span>
-            <div style={{ fontSize: '1.4rem', fontWeight: 900, color: timeLeft > 10 ? 'var(--accent)' : 'var(--error)' }}>{timeLeft}s</div>
-          </div>
-          {currentWord && isDrawer && (
-            <div>
-              <span style={{ color: 'var(--text3)', fontSize: '0.8rem' }}>Your Word</span>
-              <div style={{ fontSize: '1.1rem', fontWeight: 900, color: 'var(--accent2)' }}>🤐 Secret</div>
-            </div>
-          )}
+    <div className="h-screen flex flex-col bg-gray-100 font-sans">
+      {/* Top Bar */}
+      <div className="bg-white shadow-md p-4 flex justify-between items-center">
+        <div>
+          <h1 className="text-2xl font-bold">Room {roomId}</h1>
+          <p>Round {gameState.round}/{gameState.totalRounds} - {gameState.phase.replace('_', ' ').toUpperCase()}</p>
         </div>
-        <button className="btn-secondary" onClick={() => navigate(`/lobby/${roomId}`)}>
-          ← Back to Lobby
-        </button>
+        <div className="text-xl font-mono">{gameState.timeLeft ? formatTime(gameState.timeLeft) : '00:00'}</div>
+        {isDrawing && <div className="text-green-600 font-bold">🖌️ You are drawing: {wordHint}</div>}
+        {!isDrawing && currentWord && <div>Word: {wordHint || '?'}</div>}
       </div>
 
-      {/* Main content */}
-      <div style={{ flex: 1, display: 'flex', gap: 12, padding: 12, minHeight: 0 }}>
-        {/* Canvas area */}
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-          <div style={{ background: 'var(--card)', borderRadius: 12, flex: 1, display: 'flex', padding: 8, minHeight: 0 }}>
-            <DrawingCanvas isDrawer={isDrawer} canvasStrokes={canvasStrokes} />
-          </div>
-        </div>
+      {/* Main Game Area */}
+      <div className="flex flex-1 overflow-hidden">
+        {/* Players Sidebar */}
+        <div className="w-80 bg-white border-r border-gray-200 p-4 overflow-y-auto">
+          <h3 className="font-bold text-lg mb-4">Players ({players.length})</h3>
+          <div className="space-y-2">
+            {players.map(player => (
+              <div key={player.id} className={`flex items-center p-2 rounded-lg transition-all ${
+                player.id === gameState.drawerId ? 'bg-yellow-100 border-2 border-yellow-400' :
+                player.hasGuessed ? 'bg-green-100' : ''
+              }`}>
+                <Avatar index={player.avatar} name={player.name} size={40} />
 
-        {/* Right sidebar with info and chat */}
-        <div style={{ width: 300, display: 'flex', flexDirection: 'column', gap: 12, minHeight: 0 }}>
-          {/* Current Word for guesser */}
-          {!isDrawer && currentWord && (
-            <div className="card" style={{ padding: 12 }}>
-              <p style={{ color: 'var(--text3)', fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase', marginBottom: 8 }}>Word Hint</p>
-              <div style={{ fontSize: '2rem', fontWeight: 900, color: 'var(--accent2)', textAlign: 'center' }}>
-                {wordHint || '?'}
+                <div className="ml-3 flex-1">
+                  <div className="font-medium">{player.name}</div>
+                  <div className="text-sm text-gray-500">Score: {player.score}</div>
+                  {player.hasGuessed && <span className="text-xs bg-green-200 px-2 py-1 rounded-full">Guessed!</span>}
+                </div>
               </div>
-            </div>
-          )}
-
-          {/* Chat panel */}
-          <div style={{ flex: 1, background: 'var(--card)', borderRadius: 12, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-            <ChatPanel
-              messages={messages}
-              onSend={handleSendMessage}
-              isDrawer={isDrawer}
-              hasGuessedCorrectly={hasGuessedCorrectly}
-              phase={gameState.phase}
-            />
+            ))}
           </div>
         </div>
+
+        {/* Canvas Area */}
+        <div className="flex-1 flex flex-col items-center justify-center p-8 bg-gradient-to-b from-gray-50 to-white">
+          {['drawing', 'guessing'].includes(gameState.phase) && (
+            <DrawingCanvas isDrawer={isDrawing} />
+          )}
+
+          <div className="mt-8 text-center">
+            <p className="text-2xl font-bold text-gray-700 mb-2">{drawerName} is drawing!</p>
+            {wordHint && <p className="text-4xl font-mono bg-yellow-200 px-8 py-4 rounded-lg shadow-lg">{wordHint}</p>}
+          </div>
+        </div>
+
+        {/* Chat Sidebar */}
+        <div className="w-96 bg-white border-l border-gray-200">
+          <ChatPanel messages={messages} onSend={text => addMessage({ playerId: myId, playerName: '', text, timestamp: Date.now() })} isDrawer={isDrawing} hasGuessedCorrectly={false} phase={gameState.phase} />
+        </div>
       </div>
+
+      {/* Overlays */}
+      {gameState.phase === 'round_end' && (
+        <RoundEnd 
+          word={gameState.currentWord || 'Unknown'} 
+          scores={players.map(p => ({ id: p.id, name: p.name, score: p.score, avatar: p.avatar }))} 
+          players={players} 
+        />
+      )}
+{(gameState.phase as string) === 'word_selection' && (
+        <WordSelection 
+          words={[]} 
+          onChoose={() => {}} 
+          drawTime={60} 
+        />
+      )}
     </div>
   );
 }
